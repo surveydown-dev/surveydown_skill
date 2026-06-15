@@ -10,20 +10,24 @@
 #   ./deploy.sh --space <owner>/<name> [--dir <survey-dir>] [--title "Display Title"] [--wait]
 #   ./deploy.sh --space <owner>/<name> --no-push     # build only, don't push
 #
-#   --space    target Hugging Face Space, e.g. yourname/my-survey   (required)
-#   --dir      path to the survey directory                          (default: .)
-#   --title    display title shown on the Space card (any text, spaces ok)
-#              (default: derived from the Space name, e.g. "My Survey")
-#              This is only the display name; the URL slug never changes.
-#   --wait     after pushing, poll until the Space is RUNNING and report the
-#              live URL + HTTP status (deploy and verify in one command)
-#   --no-push  assemble the Space folder and print its path; skip the push
+#   --space       target Hugging Face Space, e.g. yourname/my-survey   (required)
+#   --dir         path to the survey directory                         (default: .)
+#   --title       display title shown on the Space card (any text, spaces ok)
+#                 (default: derived from the Space name, e.g. "My Survey")
+#                 This is only the display name; the URL slug never changes.
+#   --wait        after pushing, poll until the Space is RUNNING and report the
+#                 live URL + HTTP status (deploy and verify in one command)
+#   --no-push     assemble the Space folder and print its path; skip the push
+#   --no-secrets  skip the automatic database-secret sync (see below)
 #
 # What it does:
 #   copy the survey's runtime files -> add the shared Dockerfile + a generated
 #   README (HF frontmatter) + packages.txt (from the survey's library() calls)
 #   -> push to the Space, which auto-rebuilds. If the Space doesn't exist yet and
 #   the `hf` CLI is available, it is created (Docker SDK) automatically.
+#   If the survey is in `mode: database` and a real .env sits next to it, the
+#   SD_* credentials are pushed to the Space as Secrets (via set-secrets.sh),
+#   unless --no-secrets is given. Placeholder .env values are refused, not pushed.
 #
 # Prerequisites:
 #   - git, and rsync (or it falls back to cp).
@@ -51,15 +55,17 @@ DIR="."
 TITLE=""
 PUSH=true
 WAIT=false
+SECRETS=true
 while [ $# -gt 0 ]; do
   case "$1" in
-    --space)   SPACE="${2:-}"; shift 2 ;;
-    --dir)     DIR="${2:-}"; shift 2 ;;
-    --title)   TITLE="${2:-}"; shift 2 ;;
-    --wait)    WAIT=true; shift ;;
-    --no-push) PUSH=false; shift ;;
-    -h|--help) sed -n '2,39p' "$0"; exit 0 ;;
-    *)         echo "Unknown argument: $1" >&2; exit 1 ;;
+    --space)      SPACE="${2:-}"; shift 2 ;;
+    --dir)        DIR="${2:-}"; shift 2 ;;
+    --title)      TITLE="${2:-}"; shift 2 ;;
+    --wait)       WAIT=true; shift ;;
+    --no-push)    PUSH=false; shift ;;
+    --no-secrets) SECRETS=false; shift ;;
+    -h|--help)    sed -n '2,43p' "$0"; exit 0 ;;
+    *)            echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
 
@@ -157,6 +163,29 @@ cp -R "$tmp/space/." "$tmp/hf/"
     echo "    pushed -> https://${owner}-${name}.hf.space  (building...)"
   fi
 )
+
+# 6b. Database mode: sync the survey's DB credentials to the Space as Secrets.
+#     Runs only when the survey is in `mode: database` and a real .env sits next
+#     to it. set-secrets.sh refuses placeholders and never prints values. A
+#     failure here (e.g. placeholders) is a warning, not a fatal deploy error.
+if [ "$SECRETS" = true ]; then
+  # Read the survey mode from survey.qmd's survey-settings (default: database).
+  mode_val="$(grep -E '^[[:space:]]*mode:[[:space:]]*' "$DIR/survey.qmd" 2>/dev/null \
+    | head -1 | sed -E 's/.*mode:[[:space:]]*//; s/[[:space:]]*#.*//; s/["'"'"']//g; s/[[:space:]]*$//')"
+  mode_val="${mode_val:-database}"
+  if [ "$mode_val" = database ]; then
+    if [ -f "$DIR/.env" ]; then
+      echo "    database mode — syncing DB secrets from $DIR/.env ..."
+      if ! "$SCRIPT_DIR/set-secrets.sh" --space "$SPACE" --env "$DIR/.env"; then
+        echo "    ! secrets not synced (see above). The Space will show 'DATABASE" >&2
+        echo "      NOT CONNECTED' until real credentials are set." >&2
+      fi
+    else
+      echo "    database mode but no .env in $DIR — set Space Secrets manually or" >&2
+      echo "      add a .env, then re-run (or run set-secrets.sh)." >&2
+    fi
+  fi
+fi
 
 # 7. Optionally wait until the Space is RUNNING, then verify the URL.
 if [ "$WAIT" = true ]; then

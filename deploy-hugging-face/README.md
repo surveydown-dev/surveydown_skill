@@ -41,12 +41,14 @@ survey.)
    2. **On Hugging Face:** the same six `SD_*` values must exist as Space
       **Secrets** (not public Variables); `sd_db_connect()` reads them from the
       environment. Until they are set, the live survey runs but shows a "DATABASE
-      NOT CONNECTED — responses are not being saved" banner. Two ways to set them:
-      - **Preferred — `set-secrets.sh`** (keeps credentials out of logs/chat): it
-        reads the local `.env` and pushes each value as a Secret via the
-        `huggingface_hub` API **without printing the values**, and refuses obvious
-        placeholders. As the assistant, use this rather than asking the user to
-        type credentials into the conversation:
+      NOT CONNECTED — responses are not being saved" banner.
+      - **Automatic (default):** when the survey is in `mode: database` and a real
+        `.env` sits next to it, **`deploy.sh` syncs the secrets for you** after the
+        push — it calls `set-secrets.sh`, which reads the `.env` and pushes each
+        value as a Secret via the `huggingface_hub` API **without printing the
+        values**, refusing obvious placeholders. So the one deploy command also
+        provisions the secrets. (Pass `--no-secrets` to skip this.)
+      - **Standalone:** run it yourself any time (e.g. after rotating a password):
         ```bash
         /path/to/deploy-hugging-face/set-secrets.sh --space <owner>/<name>
         # reads ./.env by default; pass --env <path> for a survey elsewhere
@@ -54,6 +56,9 @@ survey.)
       - **Manual UI:** add each `SD_*` as a **Secret** under the Space's
         **Settings → Variables and secrets**
         (`https://huggingface.co/spaces/<owner>/<name>/settings`).
+
+      As the assistant, rely on the automatic/standalone script paths — never ask
+      the user to paste credentials into the conversation.
 
 2. **Cookies** — ask "Do you want to use cookies?" with **yes** / **no**:
    - **yes** (`use-cookies: true`) — a per-browser cookie lets each participant
@@ -160,10 +165,16 @@ Run from your survey directory (or pass `--dir`):
 
 # deploy AND wait: poll until the Space is RUNNING, then report URL + HTTP status:
 /path/to/deploy-hugging-face/deploy.sh --space yourname/my-survey --wait
+
+# database-mode survey: this also pushes the .env's SD_* values as Space Secrets:
+/path/to/deploy-hugging-face/deploy.sh --space yourname/my-survey --wait
+# ...or skip the secret sync with --no-secrets
 ```
 
 If the Space doesn't exist yet, `deploy.sh` creates it for you (Docker SDK, via the
-`hf` CLI) and then pushes — no need to pre-create it.
+`hf` CLI) and then pushes — no need to pre-create it. For a `mode: database` survey
+with a real `.env` alongside it, the same command also provisions the database
+Secrets on the Space (see the Agent workflow section).
 
 (When the skill is installed, the script is at
 `~/.claude/skills/surveydown-skill/deploy-hugging-face/deploy.sh`.)
@@ -197,7 +208,11 @@ For the survey directory, `deploy.sh`:
    frontmatter), and a generated `packages.txt`.
 3. Creates the Space if it doesn't exist (Docker SDK, via the `hf` CLI), then
    pushes the result, which auto-rebuilds.
-4. With `--wait`, polls the Space's runtime stage until `RUNNING` and reports the
+4. If the survey is in `mode: database` and a real `.env` is next to it, syncs the
+   `SD_*` credentials to the Space as Secrets (via `set-secrets.sh`). Skipped for
+   `local`/`preview` mode, when there's no `.env`, or with `--no-secrets`.
+   Placeholder values are refused, and a failure here is a warning, not fatal.
+5. With `--wait`, polls the Space's runtime stage until `RUNNING` and reports the
    live URL + HTTP status (otherwise it returns right after the push, while the
    build continues on Hugging Face).
 
