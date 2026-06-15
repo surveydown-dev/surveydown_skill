@@ -7,16 +7,15 @@ description: End-to-end skill for surveydown — the R + Quarto + Shiny survey p
 
 Use this skill for any [surveydown](https://surveydown.org) task — authoring a survey or deploying one to a host. surveydown surveys are R + Quarto + Shiny apps (an `app.R` plus a `survey.qmd`), so they need a host that runs R/Shiny, not a static host.
 
-The skill is organized by task. Read the doc that matches what you're doing:
+The skill is organized into one folder per section, each with a `README.md` guide
+(and its tooling). Read the section that matches what you're doing:
 
-| Task | Status | Read |
-|------|--------|------|
-| Create a new survey | 🚧 under construction | [`resources/creating-a-survey.md`](resources/creating-a-survey.md) |
-| Connect a database to store responses | 🚧 under construction | [`resources/connecting-a-database.md`](resources/connecting-a-database.md) |
-| Deploy to **Hugging Face Spaces** (Docker) | ✅ implemented | [`resources/hugging-face-deployment.md`](resources/hugging-face-deployment.md) |
-| Deploy to **Posit Connect Cloud** | 🚧 under construction | [`resources/posit-connect-cloud-deployment.md`](resources/posit-connect-cloud-deployment.md) |
-
-Each implemented task keeps its tooling in a sibling directory (e.g. the Hugging Face tooling lives in [`hugging-face/`](hugging-face/)).
+| Task | Status | Section |
+|------|--------|---------|
+| Create a new survey | 🚧 under construction | [`creating-a-survey/`](creating-a-survey/README.md) |
+| Connect a database to store responses | 🚧 under construction | [`connecting-a-database/`](connecting-a-database/README.md) |
+| Deploy to **Hugging Face Spaces** (Docker) | ✅ implemented | [`hugging-face/`](hugging-face/README.md) |
+| Deploy to **Posit Connect Cloud** | 🚧 under construction | [`posit-connect-cloud/`](posit-connect-cloud/README.md) |
 
 ## Core principles (apply across all tasks)
 

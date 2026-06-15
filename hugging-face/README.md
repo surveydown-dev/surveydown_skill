@@ -1,7 +1,7 @@
 # Deploying surveydown templates to Hugging Face Spaces
 
 Deploy the surveydown survey templates to **Hugging Face Spaces** (Docker SDK).
-Tooling lives in [`../hugging-face/`](../hugging-face/).
+The generator script (`deploy.sh`) and shared assets live in this folder.
 
 Each template is its own GitHub repo and remains the **single source of truth**.
 The tooling does not duplicate surveys — it *generates* each Space from its
@@ -23,7 +23,7 @@ Trade-offs to know:
 
 ## How the generator works
 
-For each template, `hugging-face/deploy.sh`:
+For each template, `deploy.sh`:
 
 1. Clones the template from `github.com/<GITHUB_ORG>/template_<name>` (tracked files only).
 2. Assembles the Space content: the template's `app.R`, `survey.qmd`, and any
@@ -37,7 +37,7 @@ Hugging Face rejects in plain git.
 
 ### One shared Dockerfile
 
-`hugging-face/assets/Dockerfile` is identical for every Space. Per-template R
+`assets/Dockerfile` is identical for every Space. Per-template R
 packages are supplied via a generated `packages.txt` (derived from each template's
 `library()`/`require()` calls), so there is exactly one Dockerfile to maintain.
 surveydown installs from GitHub (dev v1.3.0; CRAN only has 1.0.1). The Quarto CLI
@@ -57,9 +57,9 @@ build servers).
 
 ## Usage
 
-```bash
-cd hugging-face
+Run these from this `hugging-face/` folder:
 
+```bash
 # Build only (no push) — inspect the assembled Space folder under /tmp
 ./deploy.sh --no-push question-types
 
@@ -78,7 +78,7 @@ Override the GitHub org or Hugging Face owner via env vars:
 GITHUB_ORG=surveydown-dev HF_OWNER=surveydown ./deploy.sh --all
 ```
 
-## Files (under `hugging-face/`)
+## Files (in this folder)
 
 | File | Purpose |
 |------|---------|
@@ -90,5 +90,5 @@ GITHUB_ORG=surveydown-dev HF_OWNER=surveydown ./deploy.sh --all
 
 ## Adding a template
 
-Add its repo name (`template_<name>`) to `hugging-face/templates.txt`, create the
-Space, and run `./deploy.sh <name>`. No other changes needed.
+Add its repo name (`template_<name>`) to `templates.txt`, create the Space, and
+run `./deploy.sh <name>`. No other changes needed.

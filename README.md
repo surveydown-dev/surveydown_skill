@@ -15,10 +15,13 @@ routes to the right task doc.
 | Deploy to Hugging Face Spaces | ✅ available |
 | Deploy to Posit Connect Cloud | 🚧 under construction |
 
+Each section lives in its own folder with a `README.md` guide and its tooling.
 The Hugging Face deployment is fully implemented — see
-[`resources/hugging-face-deployment.md`](resources/hugging-face-deployment.md)
-(tooling in [`hugging-face/`](hugging-face/)).
-The other topics are stubbed and being filled in.
+[`hugging-face/`](hugging-face/README.md). The other section folders
+([`creating-a-survey/`](creating-a-survey/README.md),
+[`connecting-a-database/`](connecting-a-database/README.md),
+[`posit-connect-cloud/`](posit-connect-cloud/README.md)) are stubbed and being
+filled in.
 
 ## Install (Claude Code)
 
