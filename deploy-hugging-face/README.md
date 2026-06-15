@@ -38,11 +38,22 @@ survey.)
       create a `.env` holding `SD_HOST`, `SD_PORT`, `SD_DBNAME`, `SD_USER`,
       `SD_TABLE`, `SD_PASSWORD`. The `.env` is git-ignored and is **never** pushed
       to the Space (`deploy.sh` excludes it).
-   2. **On Hugging Face:** add those same six `SD_*` values as **Secrets** (not
-      public Variables) under the Space's **Settings → Variables and secrets**
-      (`https://huggingface.co/spaces/<owner>/<name>/settings`). `sd_db_connect()`
-      reads them from the environment. Until they are set, the live survey runs but
-      shows a "DATABASE NOT CONNECTED — responses are not being saved" banner.
+   2. **On Hugging Face:** the same six `SD_*` values must exist as Space
+      **Secrets** (not public Variables); `sd_db_connect()` reads them from the
+      environment. Until they are set, the live survey runs but shows a "DATABASE
+      NOT CONNECTED — responses are not being saved" banner. Two ways to set them:
+      - **Preferred — `set-secrets.sh`** (keeps credentials out of logs/chat): it
+        reads the local `.env` and pushes each value as a Secret via the
+        `huggingface_hub` API **without printing the values**, and refuses obvious
+        placeholders. As the assistant, use this rather than asking the user to
+        type credentials into the conversation:
+        ```bash
+        /path/to/deploy-hugging-face/set-secrets.sh --space <owner>/<name>
+        # reads ./.env by default; pass --env <path> for a survey elsewhere
+        ```
+      - **Manual UI:** add each `SD_*` as a **Secret** under the Space's
+        **Settings → Variables and secrets**
+        (`https://huggingface.co/spaces/<owner>/<name>/settings`).
 
 2. **Cookies** — ask "Do you want to use cookies?" with **yes** / **no**:
    - **yes** (`use-cookies: true`) — a per-browser cookie lets each participant
@@ -216,6 +227,7 @@ unusual system library may need a one-line edit to the Dockerfile.
 | File | Purpose |
 |------|---------|
 | `deploy.sh` | Build + push generator |
+| `set-secrets.sh` | Push DB credentials from `.env` to the Space as Secrets (never prints values) |
 | `assets/Dockerfile` | Shared Dockerfile used by every Space |
 | `assets/dockerignore` | Copied into each Space as `.dockerignore` |
 | `assets/space-readme.template.md` | README template (HF frontmatter) for each Space |
