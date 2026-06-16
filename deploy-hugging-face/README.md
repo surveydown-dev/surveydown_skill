@@ -123,23 +123,53 @@ The CLI ships in the `huggingface_hub` package.
 Verify: `hf version` (the binary may land in `~/.local/bin` — add it to `PATH` if
 `hf` isn't found, e.g. `export PATH="$HOME/.local/bin:$PATH"`).
 
-### 2. Log in with a Write token
+### 2. Log in with a Write token (safely)
 
-Create a **Write** token at <https://huggingface.co/settings/tokens>, then:
+Create a **Write** token at <https://huggingface.co/settings/tokens>. You log in
+**once**; after that the token lives in your OS keychain and every tool (`hf`,
+`git`, `huggingface_hub`) reads it automatically — you never pass it again.
+
+**Preferred — interactive login in a real terminal:**
+
+```bash
+hf auth login        # paste the token at the hidden prompt; answer Y to add it as a git credential
+```
+
+Run this in a normal terminal (Terminal.app, your IDE's terminal) where hidden
+input works. The token is **never echoed, never written to a file you edit, and
+never appears in any log or chat transcript** — it goes straight into the keychain.
+
+Verify: `hf auth whoami`.
+
+#### Token safety (important — for both the user and the assistant)
+
+- **Never paste a token into a chat/conversation, a script, or a committed file.**
+  Anything typed on a command line is recorded in the transcript/shell history.
+- **Don't put the token in `.zshrc`/`.bashrc` or any dotfile.** Dotfiles are
+  plaintext, often synced to git (accidental public leak), and load the secret
+  into *every* shell and process. The keychain (via `hf auth login`) is the right
+  place and is already wired into the tooling.
+- **Assistant rule:** to authenticate, rely on the **existing keychain login** —
+  do not ask the user to paste a token into the conversation. If no valid login
+  exists (`hf auth whoami` errors), ask the user to run `hf auth login` themselves
+  in their own terminal, then continue. Never run `hf auth token` (it prints the
+  token to stdout, putting it back in the transcript).
+- **Multiple accounts:** `hf auth list` shows stored logins; `hf auth switch`
+  changes the active one; `hf auth whoami` confirms it. Log in once per account
+  (each with `--add-to-git-credential` / answering Y) and switch as needed.
+
+**Fallback — non-interactive shells only.** If you must log in from a shell that
+can't read hidden input (e.g. an embedded shell — you'll see *"Can not control
+echo on the terminal"* and the prompt aborts), use the `--token` form, but know
+the token will be visible in that command:
 
 ```bash
 hf auth login --token <YOUR_WRITE_TOKEN> --add-to-git-credential
 ```
 
-- `--add-to-git-credential` stores the token in your OS keychain so the later
-  `git push` to your Space is authenticated automatically.
-- **Use this `--token` form in non-interactive or embedded shells.** The plain
-  interactive `hf auth login` reads the token with hidden input, which fails in
-  shells that can't control terminal echo (you'll see *"Can not control echo on
-  the terminal"* and it aborts). The `--token` flag sidesteps that. (In a normal
-  interactive terminal, plain `hf auth login` works fine.)
-
-Verify: `hf auth whoami`.
+Prefer the interactive method whenever possible; only fall back to `--token` when
+hidden input is genuinely unavailable, and rotate the token afterward if it landed
+anywhere persistent.
 
 > No `hf` CLI? You can still deploy, but you must create the Space yourself first
 > (<https://huggingface.co/new-space>, **Docker** SDK), and `git` will prompt for
