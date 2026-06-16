@@ -175,17 +175,36 @@ if [ "$SECRETS" = true ]; then
 fi
 
 # 7. Optionally wait until the Space is RUNNING, then verify the URL.
+#    Exit codes: 0 = RUNNING, 1 = build/runtime error or timeout,
+#                3 = HARDWARE QUOTA reached (Space pushed but cannot run).
 if [ "$WAIT" = true ]; then
   api="https://huggingface.co/api/spaces/${owner}/${name}"
   app_url="https://${owner}-${name}.hf.space"
   echo "    waiting for the Space to build (this is usually a few minutes)..."
   stage=""
   for _ in $(seq 1 60); do   # up to ~20 min (60 * 20s)
-    # Grab the runtime stage from the Space API without a JSON dependency.
-    stage="$(curl -fsSL "$api" 2>/dev/null | grep -o '"stage":"[^"]*"' | head -1 | cut -d'"' -f4)"
+    # One API read per tick; pull stage + (if present) the runtime errorMessage.
+    resp="$(curl -fsSL "$api" 2>/dev/null || true)"
+    stage="$(printf '%s' "$resp" | grep -o '"stage":"[^"]*"' | head -1 | cut -d'"' -f4)"
     echo "      [$(date +%H:%M:%S)] stage=${stage:-unknown}"
     case "$stage" in
       RUNNING) break ;;
+      PAUSED)
+        # A Space we just deployed should be building/running. PAUSED here means
+        # Hugging Face refused to run it — almost always the hardware quota. HF
+        # exposes the real numbers in runtime.errorMessage even though the prose
+        # docs hide them (e.g. "Quota exceeded ... current=3, limit=3").
+        qmsg="$(printf '%s' "$resp" | grep -o '"errorMessage":"[^"]*"' | head -1 | sed -E 's/.*"errorMessage":"//; s/"$//')"
+        if printf '%s' "$qmsg" | grep -qi "quota"; then
+          echo "    ! HARDWARE QUOTA REACHED — Hugging Face won't run this Space." >&2
+          echo "      ${qmsg}" >&2
+          echo "      The upload succeeded; the Space just can't start. Free/pause" >&2
+          echo "      other Spaces or upgrade the account, then restart it. Stopping" >&2
+          echo "      so you can decide rather than waiting on a build that won't run." >&2
+          exit 3
+        fi
+        echo "    ! Space is PAUSED${qmsg:+ ($qmsg)}. Stopping." >&2
+        exit 3 ;;
       *RUNTIME_ERROR*|*BUILD_ERROR*|CONFIG_ERROR)
         echo "    ! Space ended in '$stage'. Check the build logs:" >&2
         echo "      ${space_url}?logs=build" >&2

@@ -264,6 +264,43 @@ errors, check the logs at `https://huggingface.co/spaces/<owner>/<name>?logs=bui
 (Quarto is in the image). This keeps the Space lean and avoids shipping a stale
 build (your `survey.qmd` stays the single source of truth).
 
+## Hardware quota (the free-tier cap) and how the tooling detects it
+
+A Hugging Face account can **create** unlimited Spaces, but only a limited number
+can **run at once** — a shared "hardware quota" across all your Spaces. On free
+**CPU Basic** this is small (observed: ~3 concurrent). Exceeding it doesn't fail
+the upload; the extra Spaces are **quota-paused** (they return HTTP 503 and do
+**not** auto-wake — only inactivity-*sleeping* Spaces auto-wake; a quota-pause
+needs a manual owner restart).
+
+Hugging Face does not document the CPU limit in prose, but it **exposes the real
+numbers in the API** — a quota-paused Space's `runtime.errorMessage` reads e.g.:
+
+```
+Quota exceeded for flavor cpu-basic (requested=1): current=3, limit=3
+```
+
+The tooling uses this so you don't wait on builds that will never run:
+
+- **`check-quota.sh <owner>`** — pre-flight. Reports running/paused counts and the
+  `limit` (and `headroom`) read from the API. Exit code **3** if you're already at
+  the cap. Run it before a batch deploy:
+  ```bash
+  /path/to/deploy-hugging-face/check-quota.sh surveydown
+  ```
+- **`deploy.sh --wait`** — if a just-deployed Space lands in `PAUSED` with a quota
+  message, it prints the `current/limit` and **exits 3** immediately (rather than
+  polling a build that won't run).
+
+### Agent rule — stop on quota, don't grind
+
+When `deploy.sh` exits **3** (or `check-quota.sh` shows zero headroom), the
+hardware quota is reached. **Stop deploying further Spaces** and report it to the
+user with the `current/limit` numbers — do not retry or keep polling. Deploying
+many Spaces? Run `check-quota.sh` first, and after each `--wait` deploy check for
+exit 3 so the batch halts at the cap instead of creating a pile of paused Spaces.
+Whether to pause others, upgrade, or change hosts is the user's decision.
+
 ### One shared Dockerfile
 
 `assets/Dockerfile` is the same for every survey. The R packages a given survey
@@ -279,6 +316,7 @@ unusual system library may need a one-line edit to the Dockerfile.
 |------|---------|
 | `deploy.sh` | Build + push generator |
 | `set-secrets.sh` | Push DB credentials from `.env` to the Space as Secrets (never prints values) |
+| `check-quota.sh` | Report an account's running/paused Spaces and the real hardware limit |
 | `assets/Dockerfile` | Shared Dockerfile used by every Space |
 | `assets/dockerignore` | Copied into each Space as `.dockerignore` |
 | `assets/space-readme.template.md` | README template (HF frontmatter) for each Space |
