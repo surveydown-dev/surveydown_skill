@@ -16,7 +16,6 @@ The skill is organized into one folder per section, each with a `README.md` guid
 | Connect a database to store responses | 🚧 under construction | [`connect-database/`](connect-database/README.md) |
 | Deploy to **Hugging Face Spaces** (Docker) | ✅ implemented | [`deploy-hugging-face/`](deploy-hugging-face/README.md) |
 | Deploy to **Posit Connect Cloud** | 🚧 under construction | [`deploy-posit-cloud/`](deploy-posit-cloud/README.md) |
-| Deploy via **shinylive** (in-browser, serverless) | ❌ not viable | [`deploy-shinylive/`](deploy-shinylive/README.md) |
 
 ## Core principles (apply across all tasks)
 
