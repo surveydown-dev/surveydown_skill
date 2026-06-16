@@ -53,8 +53,10 @@ Same two critical `survey.qmd` settings as every host. Ask both, then edit the
         `SD_PORT`, `SD_DBNAME`, `SD_USER`, `SD_TABLE`, `SD_PASSWORD`. The `.env`
         is git-ignored and never shipped.
      2. `set-secrets.sh` stores them in Secret Manager (values never printed,
-        placeholders refused); the deploy references them with `--set-secrets`.
-        Don't ask the user to paste credentials into chat.
+        placeholders refused) **and grants the Cloud Run runtime service account
+        the `secretmanager.secretAccessor` role** on each (otherwise the revision
+        fails with "Permission denied on secret …"); the deploy references them
+        with `--set-secrets`. Don't ask the user to paste credentials into chat.
 
 2. **Cookies** — "Do you want to use cookies?" **yes** (`use-cookies: true`,
    per-browser resume) / **no** (`use-cookies: false`, fresh each load). Set it in
