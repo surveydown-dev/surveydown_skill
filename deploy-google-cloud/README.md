@@ -35,7 +35,12 @@ Trade-offs to know:
 
 ## Agent workflow (follow this when deploying for a user)
 
-Settle these with the user **before** running `deploy.sh` — do not assume any.
+**First, once per session:** before the *first* Cloud Run deployment, show the
+user the contents of [`caveat.md`](caveat.md) (billing-card requirement, why it's
+usually free, when it can cost money, and the suggested $1 budget alert). Show it
+**only once** — if deploying many surveys in one go, do not repeat it.
+
+Then settle these with the user **before** running `deploy.sh` — do not assume any.
 
 ### A. Survey configuration — ALWAYS ASK BOTH
 
@@ -126,6 +131,7 @@ exits with `EACCES … _survey` before binding the port.
 |------|---------|
 | `deploy.sh` | Build context generator + `gcloud run deploy` |
 | `set-secrets.sh` | Store DB credentials from `.env` in Secret Manager (never prints values) |
+| `caveat.md` | Billing-card requirement + cost caveat + $1 budget — show once per session |
 | `assets/Dockerfile` | Shared Cloud Run Dockerfile (listens on `$PORT`) |
 | `assets/start.sh` | Runs the app from writable `/tmp` (read-only-fs fix) |
 | `assets/dockerignore` | Copied into the build context as `.dockerignore` |
