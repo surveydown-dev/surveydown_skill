@@ -30,17 +30,15 @@
 #   unless --no-secrets is given. Placeholder .env values are refused, not pushed.
 #
 # Prerequisites:
-#   - git, and rsync (or it falls back to cp).
-#   - The `hf` CLI, logged in (so the Space can be auto-created and the push is
-#     authenticated). One-time setup:
+#   - rsync (or it falls back to cp).
+#   - The `hf` CLI, logged in. The push uses `hf upload` (HTTP API + the active
+#     login token) — not raw git — so it always authenticates as whoever
+#     `hf auth whoami` reports, and switching accounts (`hf auth switch`) just
+#     works without touching any OS git credential. One-time setup (do this in a
+#     real terminal so the token isn't echoed/logged):
 #       pipx install huggingface_hub      # or: brew install huggingface-cli
-#       hf auth login --token <WRITE_TOKEN> --add-to-git-credential
-#     (Use the --token form in non-interactive/embedded shells, where the
-#     interactive prompt cannot read a hidden token. Get a Write token at
-#     https://huggingface.co/settings/tokens .)
-#   - Without the `hf` CLI you must create the Space yourself first
-#     (huggingface.co/new-space, Docker SDK) and git will prompt for your
-#     username + a Write token on the first push.
+#       hf auth login                     # paste a Write token at the hidden prompt
+#     Get a Write token at https://huggingface.co/settings/tokens .
 
 set -euo pipefail
 
@@ -64,7 +62,7 @@ while [ $# -gt 0 ]; do
     --wait)       WAIT=true; shift ;;
     --no-push)    PUSH=false; shift ;;
     --no-secrets) SECRETS=false; shift ;;
-    -h|--help)    sed -n '2,43p' "$0"; exit 0 ;;
+    -h|--help)    sed -n '2,41p' "$0"; exit 0 ;;
     *)            echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
@@ -131,38 +129,27 @@ if [ "$PUSH" != true ]; then
   exit 0
 fi
 
-# 6. Push to the Space (replace contents, keep its git history).
-#    If the clone fails, the Space probably doesn't exist yet — create it with
-#    the hf CLI (Docker SDK) and retry once.
+# 6. Push to the Space via `hf upload` (HTTP API + the ACTIVE hf login token).
+#    We deliberately avoid raw `git push`: git authenticates through the OS
+#    credential helper, which holds a single stale token per host and breaks the
+#    moment you switch Hugging Face accounts. `hf upload` always uses whichever
+#    account `hf auth whoami` reports, so account-switching just works.
+#    `--delete "*"` replaces the Space's contents in the same commit.
 space_url="https://huggingface.co/spaces/${owner}/${name}"
-if ! git clone --quiet "$space_url" "$tmp/hf" 2>/dev/null; then
-  if command -v hf >/dev/null 2>&1; then
-    echo "    Space not found — creating ${owner}/${name} (Docker SDK)..."
-    if ! hf repos create "${owner}/${name}" --repo-type space --space-sdk docker >/dev/null 2>&1; then
-      echo "    ! could not create the Space. Are you logged in? Run: hf auth login" >&2
-      exit 1
-    fi
-    git clone --quiet "$space_url" "$tmp/hf"
-  else
-    echo "    ! could not clone the Space, and the hf CLI isn't installed to create it." >&2
-    echo "      Install it (pipx install huggingface_hub) and log in, or create the" >&2
-    echo "      Space manually at huggingface.co/new-space (Docker SDK), then retry." >&2
-    exit 1
-  fi
+command -v hf >/dev/null 2>&1 || {
+  echo "    ! the hf CLI is required to push. Install it: pipx install huggingface_hub" >&2
+  exit 1
+}
+# Create the Space if it doesn't exist yet (no-op / ignored if it already does).
+hf repos create "${owner}/${name}" --repo-type space --space-sdk docker >/dev/null 2>&1 || true
+echo "    uploading to ${owner}/${name} (as $(hf auth whoami 2>/dev/null | sed 's/^user=//'))..."
+if ! hf upload "${owner}/${name}" "$tmp/space" . --repo-type space \
+       --delete "*" --commit-message "Deploy surveydown survey" >/dev/null 2>&1; then
+  echo "    ! upload failed. Check you're logged in (hf auth whoami) with a Write" >&2
+  echo "      token for '${owner}', then retry." >&2
+  exit 1
 fi
-( cd "$tmp/hf" && git ls-files -z | xargs -0 git rm -q --ignore-unmatch >/dev/null 2>&1 || true )
-cp -R "$tmp/space/." "$tmp/hf/"
-(
-  cd "$tmp/hf"
-  git add -A
-  if git diff --cached --quiet; then
-    echo "    no changes — Space already up to date"
-  else
-    git commit -q -m "Deploy surveydown survey"
-    git push -q
-    echo "    pushed -> https://${owner}-${name}.hf.space  (building...)"
-  fi
-)
+echo "    pushed -> https://${owner}-${name}.hf.space  (building...)"
 
 # 6b. Database mode: sync the survey's DB credentials to the Space as Secrets.
 #     Runs only when the survey is in `mode: database` and a real .env sits next

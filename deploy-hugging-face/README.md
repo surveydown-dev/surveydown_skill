@@ -100,10 +100,13 @@ Trade-offs to know:
 
 ## Prerequisites
 
-- `git`, and `rsync` (the script falls back to `cp` if it's missing).
+- `rsync` (the script falls back to `cp` if it's missing). No `git` needed — the
+  push uses `hf upload` (the Hub HTTP API), not raw git.
 - A surveydown survey directory containing `app.R` and `survey.qmd`.
-- The Hugging Face `hf` CLI, **logged in** — see Setup below. With it, `deploy.sh`
-  creates the Space for you (if it doesn't exist) and the push is authenticated.
+- The Hugging Face `hf` CLI, **logged in** — see Setup below. `deploy.sh` creates
+  the Space for you (if it doesn't exist) and uploads as the **active** login, so
+  switching accounts (`hf auth switch`) just works — no OS git credential to go
+  stale.
 
 ## Setup (one time)
 
@@ -126,13 +129,13 @@ Verify: `hf version` (the binary may land in `~/.local/bin` — add it to `PATH`
 ### 2. Log in with a Write token (safely)
 
 Create a **Write** token at <https://huggingface.co/settings/tokens>. You log in
-**once**; after that the token lives in your OS keychain and every tool (`hf`,
-`git`, `huggingface_hub`) reads it automatically — you never pass it again.
+**once**; after that the token lives in your OS keychain and the tooling (`hf`,
+`huggingface_hub`) reads it automatically — you never pass it again.
 
 **Preferred — interactive login in a real terminal:**
 
 ```bash
-hf auth login        # paste the token at the hidden prompt; answer Y to add it as a git credential
+hf auth login        # paste the token at the hidden prompt
 ```
 
 Run this in a normal terminal (Terminal.app, your IDE's terminal) where hidden
@@ -155,8 +158,9 @@ Verify: `hf auth whoami`.
   in their own terminal, then continue. Never run `hf auth token` (it prints the
   token to stdout, putting it back in the transcript).
 - **Multiple accounts:** `hf auth list` shows stored logins; `hf auth switch`
-  changes the active one; `hf auth whoami` confirms it. Log in once per account
-  (each with `--add-to-git-credential` / answering Y) and switch as needed.
+  changes the active one; `hf auth whoami` confirms it. Log in once per account and
+  switch as needed — the push uploads as whoever is active, so switching is all it
+  takes to deploy under a different account.
 
 **Fallback — non-interactive shells only.** If you must log in from a shell that
 can't read hidden input (e.g. an embedded shell — you'll see *"Can not control
@@ -164,16 +168,15 @@ echo on the terminal"* and the prompt aborts), use the `--token` form, but know
 the token will be visible in that command:
 
 ```bash
-hf auth login --token <YOUR_WRITE_TOKEN> --add-to-git-credential
+hf auth login --token <YOUR_WRITE_TOKEN>
 ```
 
 Prefer the interactive method whenever possible; only fall back to `--token` when
 hidden input is genuinely unavailable, and rotate the token afterward if it landed
 anywhere persistent.
 
-> No `hf` CLI? You can still deploy, but you must create the Space yourself first
-> (<https://huggingface.co/new-space>, **Docker** SDK), and `git` will prompt for
-> your username + a Write token on the first push.
+> The `hf` CLI is required — both to create the Space and to upload (the push goes
+> through `hf upload`, the Hub HTTP API). Install it as in step 1 above.
 
 ## Usage
 
@@ -237,7 +240,10 @@ For the survey directory, `deploy.sh`:
 2. Adds the shared `assets/Dockerfile`, a generated `README.md` (with Hugging Face
    frontmatter), and a generated `packages.txt`.
 3. Creates the Space if it doesn't exist (Docker SDK, via the `hf` CLI), then
-   pushes the result, which auto-rebuilds.
+   uploads the result with `hf upload` (the Hub HTTP API, `--delete "*"` to replace
+   contents), which auto-rebuilds. Upload authenticates as the **active** `hf`
+   login — not via git — so deploying under a different account is just
+   `hf auth switch` away, with no stale OS git credential to trip over.
 4. If the survey is in `mode: database` and a real `.env` is next to it, syncs the
    `SD_*` credentials to the Space as Secrets (via `set-secrets.sh`). Skipped for
    `local`/`preview` mode, when there's no `.env`, or with `--no-secrets`.
@@ -255,8 +261,8 @@ errors, check the logs at `https://huggingface.co/spaces/<owner>/<name>?logs=bui
 `surveydown` and `shiny` are installed by the Dockerfile regardless.
 
 `_survey/` is **not** shipped — the container renders the survey at startup
-(Quarto is in the image). This also keeps the Space repo free of binary files,
-which Hugging Face rejects in plain git.
+(Quarto is in the image). This keeps the Space lean and avoids shipping a stale
+build (your `survey.qmd` stays the single source of truth).
 
 ### One shared Dockerfile
 
