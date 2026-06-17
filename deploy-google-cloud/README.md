@@ -72,7 +72,7 @@ Same two critical `survey.qmd` settings as every host. Ask both, then edit the
 3. **URL slug** = the **Cloud Run service name** — ask the user. It's the leading
    label of the URL (`https://<slug>-<projectnumber>.<region>.run.app`). Must be
    lowercase letters/digits/hyphens, start with a letter. Propose one from the
-   survey/folder name (e.g. `surveydown-default`) and let them accept or change it.
+   survey/folder name (e.g. `my-survey`) and let them accept or change it.
    There is **no separate display title** on Cloud Run (unlike a Hugging Face
    Space card), so slug is the only name to choose.
 4. **Project & region** — confirm the target **GCP project** (it determines

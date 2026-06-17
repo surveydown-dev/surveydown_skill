@@ -1,6 +1,6 @@
 ---
 name: surveydown-skill
-description: End-to-end skill for surveydown — the R + Quarto + Shiny survey platform. Covers creating a survey, connecting a database to store responses, and deploying to Hugging Face Spaces, Google Cloud Run, and Posit Connect Cloud. Implemented now are Hugging Face Spaces and Google Cloud Run deployment, which work on any surveydown survey (made from a template or from scratch) via a generator script that packages the survey with a shared Dockerfile and deploys it. Creating a survey, connecting a database, and Posit Connect Cloud deployment are under construction. Use whenever working with surveydown surveys — authoring or hosting.
+description: End-to-end skill for surveydown — the R + Quarto + Shiny survey platform. Covers creating a survey, connecting a database to store responses, and deploying to Hugging Face Spaces, Google Cloud Run, and Posit Connect Cloud. Implemented now are Hugging Face Spaces, Google Cloud Run, and Posit Connect Cloud deployment, which work on any surveydown survey (made from a template or from scratch) via a generator script that packages the survey and deploys it. Creating a survey and connecting a database are under construction. Use whenever working with surveydown surveys — authoring or hosting.
 ---
 
 # Skill: surveydown-skill
@@ -16,7 +16,29 @@ The skill is organized into one folder per section, each with a `README.md` guid
 | Connect a database to store responses | 🚧 under construction | [`connect-database/`](connect-database/README.md) |
 | Deploy to **Hugging Face Spaces** (Docker) | ✅ implemented | [`deploy-hugging-face/`](deploy-hugging-face/README.md) |
 | Deploy to **Google Cloud Run** (Docker) | ✅ implemented | [`deploy-google-cloud/`](deploy-google-cloud/README.md) |
-| Deploy to **Posit Connect Cloud** | 🚧 under construction | [`deploy-posit-cloud/`](deploy-posit-cloud/README.md) |
+| Deploy to **Posit Connect Cloud** (rsconnect) | ✅ implemented | [`deploy-posit-cloud/`](deploy-posit-cloud/README.md) |
+
+## Deploying? Pick a platform first
+
+There are **three** deployment platforms, and they are the **only** choices:
+**Hugging Face Spaces**, **Posit Connect Cloud**, and **Google Cloud Run**.
+
+- **If the user names a platform** (Hugging Face / Posit Connect Cloud / Google
+  Cloud Run, however phrased) — go straight to that section. **Do not ask.**
+- **If the user only says they want to deploy/host/publish a survey online**
+  *without* naming one — **ask which of the three** before doing anything else.
+  Offer only these three; do not invent or suggest other hosts (static hosts can't
+  run R/Shiny). Lead with each free tier's main limit so the user can choose:
+  - **Hugging Face Spaces** — free tier runs about **3 surveys at once**. No bank
+    card needed.
+  - **Posit Connect Cloud** — free tier allows **5 surveys** total. No bank card
+    needed.
+  - **Google Cloud Run** — **no limit** on how many, but you must **link a bank
+    card** to the Google account (stays ≈ $0 for low-traffic surveys).
+
+Once the platform is known, follow that section's README — including its
+**always-ask** survey settings (mode, cookies) and any platform-specific prompts
+(e.g. display title + URL slug for Posit Connect Cloud).
 
 ## Core principles (apply across all tasks)
 

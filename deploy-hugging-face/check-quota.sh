@@ -10,7 +10,7 @@
 # reads them via the API using the active hf login.
 #
 # Usage:
-#   ./check-quota.sh <owner>        # e.g. ./check-quota.sh surveydown
+#   ./check-quota.sh <owner>        # e.g. ./check-quota.sh yourname
 #   ./check-quota.sh                # defaults to the active account (hf auth whoami)
 #
 # Prints: how many of the account's Spaces are RUNNING vs PAUSED, and the hardware
