@@ -48,18 +48,25 @@ note <- function(...) cat("    ", sprintf(...), "\n", sep = "")
 # file under the survey dir minus build artifacts, dev junk, and SECRETS (.env /
 # .Renviron must never leave the machine). Mirrors the HF/Cloud Run excludes.
 survey_files <- function(dir) {
-  excl_dirs  <- c(".git", "_survey", "survey_files", "rsconnect", ".posit",
+  # NOTE: _survey/ IS shipped (the pre-rendered cache) so Connect Cloud cold starts
+  # import it instead of re-running Quarto every time. survey_files/ (Quarto's
+  # intermediate output dir) is not needed — survey.html is self-contained.
+  excl_dirs  <- c(".git", "survey_files", "rsconnect", ".posit",
                   ".Rproj.user", ".Ruserdata")
   excl_files <- c(".gitignore", ".gitattributes", ".env", ".Renviron",
-                  "survey.html", "preview_data.csv", "local_data.csv",
+                  "preview_data.csv", "local_data.csv",
                   "manifest.json", ".DS_Store")
+  # Drop the stray ROOT-level survey.html (a render artifact), but keep
+  # _survey/survey.html — so this must be path-specific, not basename-based.
+  excl_paths <- c("survey.html")
   all <- list.files(dir, recursive = TRUE, all.files = TRUE, no.. = TRUE)
   keep <- vapply(all, function(p) {
     segs <- strsplit(p, "/", fixed = TRUE)[[1]]
     if (any(segs %in% excl_dirs)) return(FALSE)
+    if (p %in% excl_paths) return(FALSE)
     base <- basename(p)
     if (base %in% excl_files) return(FALSE)
-    if (grepl("\\.Rproj$", base)) return(FALSE)
+    if (endsWith(base, ".Rproj")) return(FALSE)
     TRUE
   }, logical(1))
   unname(all[keep])
@@ -138,23 +145,78 @@ if (cfg$secrets && identical(cfg$mode, "database")) {
   }
 }
 
-# ---- 1. Deploy ----------------------------------------------------------------
+# ---- 0. Rebuild the _survey/ cache (delete + re-render) -----------------------
+# Ship a freshly rendered _survey/ so Connect Cloud cold starts IMPORT the cache
+# instead of re-running Quarto every time. DELETE any existing _survey/ first, then
+# regenerate the full 5-file cache headlessly: sd_ui() writes survey.html +
+# head.rds + settings.yml (the render); run_config() adds pages.rds + questions.yml
+# (the parse). Output is discarded. (Literally launching app.R would block and only
+# write 3 of the 5 files without a browser session; this is the headless equivalent.)
+note("rebuilding _survey/ cache (delete + re-render) ...")
+gen <- tempfile(fileext = ".R")
+writeLines(c(
+  sprintf("setwd(%s)", shQuote(cfg$dir)),
+  "if (!requireNamespace('surveydown', quietly = TRUE)) quit(status = 2)",
+  "unlink('_survey', recursive = TRUE)",
+  "suppressMessages(suppressWarnings(library(surveydown)))",
+  "invisible(sd_ui())",
+  "surveydown:::run_config()"
+), gen)
+status <- system2("Rscript", gen, stdout = FALSE, stderr = FALSE)
+unlink(gen)
+sv <- list.files(file.path(cfg$dir, "_survey"))
+if (status == 2L) die("the 'surveydown' package is not installed — cannot pre-render _survey/. install.packages it (or pak::pak the dev version).")
+if (length(sv)) {
+  note("_survey/ ready (%d files): %s", length(sv), paste(sv, collapse = ", "))
+} else {
+  note("! _survey/ was not generated; cold starts will re-render until it is.")
+}
+
+# ---- 1. Deploy (with a transient managed .Rprofile) --------------------------
+# The shipped _survey/ alone is not enough: on each cold-start unpack the cache
+# files get fresh, jittery mtimes, so surveydown's strict-`>` staleness checks
+# fire non-deterministically (sometimes render, sometimes re-parse). A managed
+# .Rprofile — copied from the skill's assets ONLY for this deploy — stamps every
+# _survey/ file to one identical "now" at startup, making the import deterministic.
+# It is added to the bundle, then REMOVED from the working copy (failure-safe), so
+# it never lingers locally to mask your survey.qmd edits during development.
 note("deploying '%s' to %s / %s ...", cfg$name, SERVER, cfg$account)
+skill_dir <- tryCatch(
+  dirname(normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[1]))),
+  error = function(e) ".")
+asset_rp <- file.path(skill_dir, "assets", "Rprofile")
+rp <- file.path(cfg$dir, ".Rprofile")
+MARK_BEGIN <- "# >>> surveydown-deploy: transient cache stamp (auto-added, removed after deploy) >>>"
+MARK_END   <- "# <<< surveydown-deploy <<<"
+existing <- if (file.exists(rp)) readLines(rp, warn = FALSE) else character(0)
+b <- which(existing == MARK_BEGIN); e <- which(existing == MARK_END)
+if (length(b) && length(e)) existing <- existing[-(b[1]:e[length(e)])]  # strip any stale block
+had_user <- any(nzchar(existing))
+block <- if (file.exists(asset_rp)) readLines(asset_rp, warn = FALSE) else
+  "local({ if (dir.exists('_survey')) { n<-Sys.time(); for (f in list.files('_survey', full.names=TRUE, recursive=TRUE)) try(Sys.setFileTime(f,n), silent=TRUE) } })"
+writeLines(c(if (had_user) c(existing, ""), MARK_BEGIN, block, MARK_END), rp)
+restore_rprofile <- function() { if (had_user) writeLines(existing, rp) else unlink(rp) }
+
 files <- survey_files(cfg$dir)
-deployApp(
-  appDir         = cfg$dir,
-  appFiles       = files,
-  appPrimaryDoc  = "app.R",
-  appName        = cfg$name,
-  appTitle       = cfg$title,
-  account        = cfg$account,
-  server         = SERVER,
-  envVars        = if (length(env_vars)) env_vars else NULL,
-  forceUpdate    = TRUE,
-  launch.browser = FALSE,
-  lint           = FALSE,
-  logLevel       = "normal"
-)
+deploy_err <- tryCatch({
+  deployApp(
+    appDir         = cfg$dir,
+    appFiles       = files,
+    appPrimaryDoc  = "app.R",
+    appName        = cfg$name,
+    appTitle       = cfg$title,
+    account        = cfg$account,
+    server         = SERVER,
+    envVars        = if (length(env_vars)) env_vars else NULL,
+    forceUpdate    = TRUE,
+    launch.browser = FALSE,
+    lint           = FALSE,
+    logLevel       = "normal"
+  )
+  NULL
+}, error = function(e) e)
+restore_rprofile()
+if (!is.null(deploy_err)) stop(deploy_err)
 
 # ---- 2. Resolve the content GUID ---------------------------------------------
 dep <- rsconnect::deployments(cfg$dir, nameFilter = cfg$name)

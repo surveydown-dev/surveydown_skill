@@ -166,17 +166,27 @@ deploy reasserts the flag values).
 account, reads the survey's `mode` from `survey.qmd`, then hands off to
 `deploy.R`, which:
 
-1. Builds an explicit file allow-list (every file under the survey dir minus build
+0. **Rebuilds the `_survey/` cache** so cold starts are fast (see below): it
+   **deletes** any existing `_survey/`, then regenerates the 5 cache files headlessly
+   via `sd_ui()` + `surveydown:::run_config()` (in sync with the current `survey.qmd`).
+1. **Adds a transient managed `.Rprofile`** (from `assets/Rprofile`) to the survey
+   folder — this makes the shipped cache authoritative on cold starts (see below).
+   It is bundled, then **removed from the working copy after the deploy** (failure-safe,
+   and non-clobbering if you keep your own `.Rprofile`).
+2. Builds an explicit file allow-list (every file under the survey dir minus build
    artifacts, dev junk, and **secrets** — `.env`/`.Renviron` are never bundled;
-   `rsconnect` does not honour `.gitignore`, so the list is explicit).
-2. In `mode: database`, loads `SD_*` from the survey's `.env` and passes them as
+   `rsconnect` does not honour `.gitignore`, so the list is explicit). The
+   pre-rendered **`_survey/` directory and the transient `.Rprofile` ARE included**;
+   only the stray root-level `survey.html` and `survey_files/` are dropped.
+3. In `mode: database`, loads `SD_*` from the survey's `.env` and passes them as
    `deployApp(envVars=)` so they land as content secrets (placeholders refused).
-3. Runs `rsconnect::deployApp(server = "connect.posit.cloud", ...)`, which bundles
+4. Runs `rsconnect::deployApp(server = "connect.posit.cloud", ...)`, which bundles
    the files, snapshots R dependencies from the local library, uploads, and
-   publishes. A redeploy of the same `--name` updates the existing content.
-4. Resolves the content GUID from the local deployment record.
-5. Sets the **display title** and **public access** via `PATCH /v1/contents/{guid}`.
-6. Sets the **custom URL** via `PATCH /v1/contents/{guid}` with
+   publishes. A redeploy of the same `--name` updates the existing content. The
+   working-copy `.Rprofile` is then removed.
+5. Resolves the content GUID from the local deployment record.
+6. Sets the **display title** and **public access** via `PATCH /v1/contents/{guid}`.
+7. Sets the **custom URL** via `PATCH /v1/contents/{guid}` with
    `{"vanity_name": "<slug>", "domain_id": null}` (the explicit `domain_id: null`
    is required, otherwise the API rejects the vanity). The live route is tied to
    the published **revision**, so when a first-time vanity is set on
@@ -184,11 +194,43 @@ account, reads the survey's `mode` from `survey.qmd`, then hands off to
    /contents/{guid}/republish`) and waits until the new revision serves the vanity
    — otherwise the custom URL would 404 while the default GUID URL still works.
    On a redeploy where the vanity is already live, the republish is skipped.
-7. Reports the account's `N/5` application-slot usage (best effort).
-8. Verifies the live URL over HTTP and prints the public URL + dashboard link.
+8. Reports the account's `N/5` application-slot usage (best effort).
+9. Verifies the live URL over HTTP and prints the public URL + dashboard link.
 
 A first publish typically takes a **few minutes** (Connect Cloud installs the R
 dependencies remotely). Redeploys are faster.
+
+### Fast cold starts (`_survey/` cache + transient `.Rprofile`)
+
+Connect Cloud's free tier **stops an app after ~6 minutes idle**; the next visit is
+a cold start. surveydown renders `survey.qmd` → `_survey/` **at app startup**, so if
+`_survey/` isn't present the cold start re-runs Quarto before the page can paint
+(the slow wait). The tooling fixes this with **two** pieces:
+
+1. **Ship a freshly rebuilt `_survey/`** (delete + regenerate at deploy time) so the
+   cache is present in the bundle and matches the deployed `survey.qmd`.
+2. **A transient `.Rprofile`** that, at startup, stamps every `_survey/` file with one
+   identical "now".
+
+Why #2 is required (this was learned the hard way): shipping `_survey/` alone is
+**flaky**. surveydown decides whether to render/parse by comparing file mtimes with
+strict `>`, at ~1-second granularity. On each cold-start unpack the `_survey/` files
+get fresh, jittery mtimes relative to `survey.qmd` and the build-installed
+`surveydown` package — so the same survey would *sometimes* import the cache,
+*sometimes* re-parse, and *sometimes* re-render, depending on which files landed in
+the same one-second tick. The `.Rprofile` (sourced before `sd_ui()`) collapses that
+race: it makes the cache unambiguously newest **and** internally equal, so the checks
+deterministically pass → `No changes detected. Importing contents from "_survey"
+folder`. Verified on a true cold start.
+
+Notes:
+- The cache is **rebuilt on every deploy** (delete + re-render), so it always matches
+  the deployed `survey.qmd` — the `.Rprofile`'s "never re-render" only suppresses a
+  redo of work already done at deploy, never real changes.
+- The `.Rprofile` is **transient**: added only for the deploy and removed from your
+  working copy afterward. It must not linger locally, or your *local* dev runs would
+  stop re-rendering your `survey.qmd` edits. `assets/Rprofile` holds the canonical
+  copy; `deploy.R` injects and strips it (failure-safe, non-clobbering).
 
 ### Free-tier cap (5 applications) — agent rule
 
@@ -203,5 +245,6 @@ automatic retry. Redeploying any of the existing 5 is always fine.
 | File | Purpose |
 |------|---------|
 | `deploy.sh` | Entry point: validates inputs, resolves the account, runs `deploy.R` |
-| `deploy.R` | R workhorse: `deployApp` + sets title/URL/secrets via the Connect Cloud API |
+| `deploy.R` | R workhorse: rebuilds `_survey/`, injects the transient `.Rprofile`, `deployApp`, sets title/URL/secrets via the Connect Cloud API |
+| `assets/Rprofile` | Canonical transient `.Rprofile` injected at deploy (stamps `_survey/` so cold starts import the cache) |
 | `README.md` | This guide |

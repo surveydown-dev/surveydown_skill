@@ -1,0 +1,24 @@
+# Makes the shipped _survey/ cache authoritative on Connect Cloud cold starts.
+#
+# A cold start re-unpacks the published bundle, and the unpacked _survey/ files get
+# fresh mtimes that are non-deterministic at ~1-second granularity relative to
+# survey.qmd and the build-installed surveydown package. surveydown decides whether
+# to render/parse by comparing those mtimes with strict `>`, so without this it
+# sometimes re-renders or re-parses (slow, flaky) and sometimes imports the cache.
+#
+# R sources this at session startup, BEFORE app.R/sd_ui() runs, and stamps EVERY
+# _survey/ file with one identical "now". That makes the cache unambiguously newest
+# AND internally consistent, so every staleness check passes and surveydown logs
+# "No changes detected. Importing contents from _survey folder" — deterministically.
+#
+# This is added by the deploy tooling ONLY inside the published bundle and removed
+# from the working copy after deploy. The tooling regenerates _survey/ to match the
+# current survey.qmd on every push, so this never serves stale content.
+local({
+  if (dir.exists("_survey")) {
+    now <- Sys.time()
+    for (f in list.files("_survey", full.names = TRUE, recursive = TRUE)) {
+      try(Sys.setFileTime(f, now), silent = TRUE)
+    }
+  }
+})
