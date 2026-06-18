@@ -1,6 +1,6 @@
 ---
 name: surveydown-skill
-description: End-to-end skill for surveydown — the R + Quarto + Shiny survey platform. Covers creating a survey, connecting a database to store responses, and deploying to Hugging Face Spaces, Google Cloud Run, and Posit Connect Cloud. Implemented now are Hugging Face Spaces, Google Cloud Run, and Posit Connect Cloud deployment, which work on any surveydown survey (made from a template or from scratch) via a generator script that packages the survey and deploys it. Creating a survey and connecting a database are under construction. Use whenever working with surveydown surveys — authoring or hosting.
+description: End-to-end skill for surveydown — the R + Quarto + Shiny survey platform. Covers creating a survey, connecting a database to store responses, deploying to Hugging Face Spaces, Google Cloud Run, and Posit Connect Cloud, and recording a local video walkthrough of a survey. Implemented now are Hugging Face Spaces, Google Cloud Run, and Posit Connect Cloud deployment (which work on any surveydown survey via a generator script that packages and deploys it), plus a macOS record-video tool that drives a survey in a visible browser and screen-captures the run. Creating a survey and connecting a database are under construction. Use whenever working with surveydown surveys — authoring, hosting, or demoing.
 ---
 
 # Skill: surveydown-skill
@@ -17,6 +17,29 @@ The skill is organized into one folder per section, each with a `README.md` guid
 | Deploy to **Hugging Face Spaces** (Docker) | ✅ implemented | [`deploy-hugging-face/`](deploy-hugging-face/README.md) |
 | Deploy to **Google Cloud Run** (Docker) | ✅ implemented | [`deploy-google-cloud/`](deploy-google-cloud/README.md) |
 | Deploy to **Posit Connect Cloud** (rsconnect) | ✅ implemented | [`deploy-posit-cloud/`](deploy-posit-cloud/README.md) |
+| Record a video walkthrough of a survey (local) | ✅ implemented (macOS) | [`record-video/`](record-video/README.md) |
+
+## Authoritative docs: consult `llms.txt` when unsure
+
+The official surveydown documentation site publishes an LLM-friendly index at:
+
+**<https://www.surveydown.org/llms.txt>**
+
+Whenever you are unsure about any documented surveydown feature — usage, syntax,
+question types, conditional logic (`sd_show_if` / `sd_skip_if` / `sd_stop_if`),
+templates, settings, data storage, or deployment — **fetch this file first.** It is
+a plain-markdown index listing every documentation, template, and blog page, each
+linking to a clean `.llms.md` version written for machines (no HTML/nav chrome).
+
+Workflow:
+1. Fetch `llms.txt` to see the full list of available pages and their URLs.
+2. Pick the page(s) relevant to the task and fetch the corresponding `.llms.md`
+   link (e.g. `https://www.surveydown.org/docs/conditional-logic.llms.md`).
+3. Prefer these pages over guessing — the installed package's roxygen only covers
+   function signatures, not how features are meant to be assembled.
+
+This index is regenerated on every site build, so it always reflects the current
+docs. Treat it as the source of truth over any memorized detail.
 
 ## Deploying? Pick a platform first
 
