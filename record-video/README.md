@@ -127,9 +127,24 @@ re-render.
   `1.0`). Functional waits (page load, ffmpeg init, polling) are not scaled.
   Override per run by exporting `SD_TIME_FACTOR=1.0` (slower) or `0.5` (faster)
   before calling the script, or setting the `SD_TIME_FACTOR` global in R.
-- **Inputs scroll into view.** Every driver (`click`, `set_text`, `set_select`,
-  sliders, dates) scrolls its question to the center and glides the cursor onto
-  it before acting, so the working location is always on camera.
+- **Inputs scroll into view (smoothly).** Every driver (`click`, `set_text`,
+  `set_select`, sliders, dates) smooth-scrolls its question to the center,
+  waits for the scroll animation to settle (`wait_scroll_settled()`), then
+  glides the cursor onto it before acting — so the working location is always
+  on camera and the scroll reads as a smooth pan, not a jump.
+- **Quick Look-friendly encoding.** `lib/record.R` encodes constant 30fps
+  (`-vsync cfr -r 30`) with a keyframe every ~0.5s
+  (`-g 15 -keyint_min 15 -sc_threshold 0`). macOS Quick Look (Space preview)
+  seeks by keyframe without decoding forward, so sparse keyframes (libx264's
+  default ~8s) made it show stale, half-decoded frozen frames; frequent
+  keyframes + CFR fix that. Full players (IINA/mpv) were never affected.
+- **Launch URL parameters.** Set `SD_URL_QUERY` (e.g.
+  `SD_URL_QUERY="?id_a=a123&id_b=b234&id_c=c345"`) to start the survey with a
+  query string present when the Shiny session connects (`sd_get_url_pars()`
+  reads it once). Used by `external_redirect`, whose walkthrough fires the
+  redirect so the real target page opens with the parameters/`status` in the
+  address bar. (The browser address bar is chrome, not page DOM, so it can't be
+  scripted — but the full URL is visible after the redirect navigates.)
 - **Reactive surveys need pacing.** When a later question's options depend on an
   earlier answer (the drilldown's `model` depends on `make`), `pause(~2s)` after
   the controlling answer so the dependent question re-renders before you set it

@@ -147,7 +147,12 @@ launch_browser <- function(debug_port = 9222, width = 1280, height = 720,
 # front so the screen recorder films it (not the about:blank launch tab).
 new_session <- function(port, wait = 6) {
   b <<- chromote_obj$new_session()
-  b$Page$navigate(app_url(port))
+  # Optional query string (e.g. survey URL parameters) via SD_URL_QUERY, so it
+  # is present when the Shiny session connects (sd_get_url_pars reads it once).
+  url <- app_url(port)
+  q <- Sys.getenv("SD_URL_QUERY", "")
+  if (nzchar(q)) url <- paste0(url, q)
+  b$Page$navigate(url)
   try(b$Page$bringToFront(), silent = TRUE)
 
   # chromote applies a default 992px device-metrics emulation, which renders
@@ -215,18 +220,38 @@ scroll_into_view <- function(sel) {
     "var el=document.querySelector('%s');
      if(el){var r=el.getBoundingClientRect();
        var t=(r.width<2||r.height<2)?(el.closest('label,.btn,.form-check,.sd-image-card,.shiny-options-group,[id^=container-]')||el.parentElement||el):el;
-       t.scrollIntoView({block:'center'});}
+       t.scrollIntoView({block:'center', behavior:'smooth'});}
      true",
     sel
   ))
 }
 
-# Bring an input on camera before driving it: scroll it to center, glide the
-# cursor onto it, and flash a click ripple. `scroll_sel` defaults to `sel` but
-# can target a container (e.g. for sliders the input itself is hidden).
+# Wait for a smooth scroll to finish: poll the page scroll position until it
+# stops changing, so the cursor lands at the element's FINAL location rather
+# than chasing it mid-animation. Functional wait (not time-factor scaled).
+wait_scroll_settled <- function(timeout = 2.5) {
+  t0 <- Sys.time(); last <- NA_real_; stable <- 0
+  repeat {
+    Sys.sleep(0.1)
+    cur <- suppressWarnings(as.numeric(js("Math.round(window.scrollY)")))
+    if (!is.na(last) && !is.na(cur) && cur == last) {
+      stable <- stable + 1
+      if (stable >= 2) break
+    } else {
+      stable <- 0
+    }
+    last <- cur
+    if (as.numeric(difftime(Sys.time(), t0, units = "secs")) > timeout) break
+  }
+}
+
+# Bring an input on camera before driving it: smooth-scroll it to center, wait
+# for the scroll to settle, glide the cursor onto it, and flash a click ripple.
+# `scroll_sel` defaults to `sel` but can target a container (e.g. for sliders
+# the input itself is hidden).
 approach <- function(sel, scroll_sel = sel) {
   scroll_into_view(scroll_sel)
-  pause(0.3)
+  wait_scroll_settled()
   cursor_to(sel)
   cursor_click()
 }
@@ -299,10 +324,10 @@ set_select <- function(id, value, wait = 1.2, show = TRUE, show_pause = 1.0) {
   if (show) {
     # 1. Center the question so its dropdown isn't clipped by the footer.
     js(sprintf(
-      "(document.getElementById('container-%s') || $('#%s')[0]).scrollIntoView({block:'center'}); true",
+      "(document.getElementById('container-%s') || $('#%s')[0]).scrollIntoView({block:'center', behavior:'smooth'}); true",
       id, id
     ))
-    pause(0.4)
+    wait_scroll_settled()
     # 2. Move the cursor onto the control and open the dropdown.
     cursor_to(sprintf("#container-%s .selectize-input", id))
     cursor_click()

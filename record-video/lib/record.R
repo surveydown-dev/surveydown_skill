@@ -36,13 +36,22 @@ start_recording <- function(outfile, fps = 30, screen = NULL, crop = NULL) {
   unlink(outfile)
 
   vf <- if (!is.null(crop)) sprintf("-vf 'crop=%s'", crop) else ""
+  # Encoder flags chosen for broad seek/preview compatibility (esp. macOS
+  # Quick Look, which seeks by keyframe and dislikes variable frame rate):
+  #   -vsync cfr -r N         force constant frame rate
+  #   -g K -keyint_min K      a keyframe every ~0.5s so scrubbing/previews
+  #   -sc_threshold 0         land on a fresh, fully-decodable frame
+  # (No -movflags +faststart: it post-processes on exit and could corrupt the
+  #  file if our SIGINT stop interrupts it; moov-at-end is fine for local play.)
+  keyint <- max(1, round(fps / 2))
   cmd <- sprintf(
     paste(
       "ffmpeg -y -f avfoundation -capture_cursor 1 -framerate %d -i '%d:none'",
-      "%s -vcodec libx264 -preset ultrafast -pix_fmt yuv420p '%s'",
+      "%s -vcodec libx264 -preset veryfast -pix_fmt yuv420p",
+      "-vsync cfr -r %d -g %d -keyint_min %d -sc_threshold 0 '%s'",
       "> /tmp/sd_record_ffmpeg.log 2>&1 & echo $!"
     ),
-    fps, screen, vf, outfile
+    fps, screen, vf, fps, keyint, keyint, outfile
   )
   rec_pid <<- as.integer(system(cmd, intern = TRUE))
   Sys.sleep(1.3) # let ffmpeg initialize the capture before the survey starts
