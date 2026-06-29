@@ -8,13 +8,12 @@ routes to the right task doc.
 
 ## What it covers
 
-| Task | Status |
-|------|--------|
-| Create a new survey | ✅ available |
-| Connect a database to store responses | ✅ available |
-| Deploy to Hugging Face Spaces | ✅ available |
-| Deploy to Google Cloud Run | ✅ available |
-| Deploy to Posit Connect Cloud | ✅ available |
+| Task | Comments |
+|------|----------|
+| Create a new survey | Start from a basic template or your own preferred topic |
+| Connect a database | Guides you through a Supabase connection or any other PostgreSQL database connection |
+| Deploy online | Supports Posit Connect Cloud, Hugging Face Spaces, and Google Cloud Run |
+| Video walkthrough | Automatically goes through the full survey and records it into a video clip |
 
 Each section lives in its own folder with a `README.md` guide and its tooling.
 Authoring starts with [`create-survey/`](create-survey/README.md) (scaffold from a
